@@ -73,5 +73,5 @@ uv run python robometer/evals/run_baseline_eval.py \
     custom_eval.policy_ranking=[libero_pi0] \
     custom_eval.use_frame_steps=false \
     custom_eval.num_examples_per_quality_pr=20 \
-    max_frames=4 \
+    max_frames=8 \
     model_config.batch_size=32
