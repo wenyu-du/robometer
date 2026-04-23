@@ -423,6 +423,14 @@ def main(cfg: GenerateConfig):
         # Load the trajectories using the loader
         task_data = load_libero_dataset(cfg.dataset.dataset_path)
         trajectories = flatten_task_data(task_data)
+    elif "my_hdf5" in cfg.dataset.dataset_name.lower():
+        from dataset_loaders.my_hdf5_loader import load_my_hdf5_dataset
+        task_data = load_my_hdf5_dataset(cfg.dataset.dataset_path)
+        trajectories = flatten_task_data(task_data)
+    elif "fetch" in cfg.dataset.dataset_name.lower():
+        from dataset_loaders.fetch_robot_loader import load_fetch_robot_dataset
+        task_data = load_fetch_robot_dataset(cfg.dataset.dataset_path)
+        trajectories = flatten_task_data(task_data)
     elif "agibotworld" in (cfg.dataset.dataset_name or "").lower():
         # Stream + convert directly inside the AgiBotWorld loader
         from dataset_upload.dataset_loaders.agibotworld_loader import (
