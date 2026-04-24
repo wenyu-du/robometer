@@ -1057,6 +1057,13 @@ def main(cfg: GenerateConfig):
             max_trajectories=cfg.output.max_trajectories,
         )
         trajectories = flatten_task_data(task_data)
+    elif "fetch_robot" in cfg.dataset.dataset_name.lower():
+        from dataset_upload.dataset_loaders.fetch_robot_loader import load_fetch_robot_dataset
+
+        print(f"Loading Fetch Robot dataset from: {cfg.dataset.dataset_path}")
+        task_data = load_fetch_robot_dataset(cfg.dataset.dataset_path)
+        trajectories = flatten_task_data(task_data)
+    
     else:
         raise ValueError(f"Unknown dataset type: {cfg.dataset.dataset_name}")
 

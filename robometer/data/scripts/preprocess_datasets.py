@@ -23,7 +23,7 @@ from sentence_transformers import SentenceTransformer
 from transformers import AutoModel, AutoImageProcessor
 from PIL import Image
 
-from datasets import Dataset, DatasetDict, Video, load_dataset
+from datasets import Dataset, DatasetDict, Video, load_dataset, load_from_disk
 from robometer.utils.distributed import rank_0_print
 from robometer.utils.embedding_utils import compute_video_embeddings, compute_text_embeddings
 
@@ -868,6 +868,37 @@ class DatasetPreprocessor:
 
     def _load_dataset_from_path(self, dataset_path: str, subset: str):
         """Load dataset from path with proper video handling."""
+
+        def patch_path(old_path):
+            # If path is already absolute and exists, return as is
+            if os.path.isabs(old_path) and os.path.exists(old_path):
+                return old_path
+
+            # Try appending to current dataset_path
+            full_path = os.path.join(dataset_path, old_path)
+            if os.path.exists(full_path):
+                return full_path
+
+            # Fallback to environment variable logic
+            dataset_root = os.environ.get("ROBOMETER_DATASET_PATH", "")
+            if dataset_root:
+                dataset_name = dataset_path.split("/")[-1]
+                root_dir = os.path.join(dataset_root, dataset_name)
+                return os.path.join(root_dir, old_path)
+
+            return old_path
+
+        if os.path.exists(dataset_path):
+            try:
+                rank_0_print(f"尝试从本地磁盘加载数据集: {dataset_path}")
+                dataset = load_from_disk(dataset_path)
+                dataset = dataset.map(
+                    lambda x: {"frames_video": patch_path(x["frames"]), "frames_path": patch_path(x["frames"])}
+                )
+                return dataset
+            except Exception as e:
+                rank_0_print(f"本地磁盘加载失败，尝试标准 load_dataset: {e}")
+
         if "/" in dataset_path and not os.path.exists(dataset_path):
             # Loading from HuggingFace Hub - handle video paths
             rank_0_print(f"Loading dataset: {dataset_path}")
@@ -882,14 +913,8 @@ class DatasetPreprocessor:
 
             dataset_name = dataset_path.split("/")[-1]
 
-            def patch_path(old_path):
-                root_dir = f"{dataset_root}/{dataset_name}"
-                return f"{root_dir}/{old_path}"  # e.g., "./videos/trajectory_0000.mp4"
-
             # Load dataset
             dataset = load_dataset(dataset_path, name=subset, split="train")
-
-            # dataset = dataset.select(range(100))
 
             # Just patch the paths, don't decode videos yet
             dataset = dataset.map(
@@ -897,8 +922,11 @@ class DatasetPreprocessor:
             )
             return dataset
         else:
-            # Load from local disk
+            # Load from local disk (standard load_dataset)
             dataset = load_dataset(dataset_path)
+            dataset = dataset.map(
+                lambda x: {"frames_video": patch_path(x["frames"]), "frames_path": patch_path(x["frames"])}
+            )
             return dataset
 
     def _show_preprocessed_datasets(self, all_datasets: list[str]):
