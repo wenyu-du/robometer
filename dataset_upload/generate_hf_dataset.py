@@ -165,10 +165,11 @@ def process_single_trajectory(args):
     try:
         # Create output directory for this trajectory with subdirectory structure
         subdir_name = get_trajectory_subdir_path(trajectory_idx)
-        full_video_path = os.path.join(
-            output_dir, dataset_name.lower(), subdir_name, f"trajectory_{trajectory_idx:04d}.mp4"
-        )
-        relative_video_path = os.path.join(dataset_name.lower(), subdir_name, f"trajectory_{trajectory_idx:04d}.mp4")
+        dataset_subdir = os.path.join(output_dir, dataset_name.lower())
+        full_video_path = os.path.join(dataset_subdir, subdir_name, f"trajectory_{trajectory_idx:04d}.mp4")
+        
+        # 修正：移除 dataset_name.lower() 前缀
+        relative_video_path = os.path.join(subdir_name, f"trajectory_{trajectory_idx:04d}.mp4")
         os.makedirs(os.path.dirname(full_video_path), exist_ok=True)
 
         # Process trajectory (lang_vector is already computed)

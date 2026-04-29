@@ -9,3 +9,4 @@ baseline_eval_output/*
 **/data_processed
 **/dataset_processed
 **/logs
+**/my_processed_data*/

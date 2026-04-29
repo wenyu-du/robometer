@@ -230,6 +230,8 @@ def create_trajectory_video_optimized(
     command = [
         "ffmpeg",
         "-y",  # Overwrite output file if it exists
+        "-loglevel", "error", # 减少日志输出，防止管道死锁
+        "-threads", "1", # 强制单线程，防止 240 核机器上线程爆炸
         "-f",
         "rawvideo",
         "-vcodec",
@@ -255,13 +257,12 @@ def create_trajectory_video_optimized(
     ]
 
     # Start the FFmpeg subprocess
-    process = sp.Popen(command, stdin=sp.PIPE, stdout=sp.PIPE, stderr=sp.PIPE)
+    # 将 stderr 定向到 DEVNULL，彻底杜绝缓冲区填满导致的死锁
+    process = sp.Popen(command, stdin=sp.PIPE, stdout=sp.DEVNULL, stderr=sp.DEVNULL)
 
     # Check if process started successfully
     if process.poll() is not None:
-        stderr = process.stderr.read().decode()
         print(f"FFmpeg failed to start. Command: {' '.join(command)}")
-        print(f"Error: {stderr}")
         raise RuntimeError("FFmpeg process failed to start")
 
     for i, frame in enumerate(processed_frames):
@@ -295,11 +296,8 @@ def create_trajectory_video_optimized(
     process.wait()
 
     # Check for errors
-    stderr = process.stderr.read().decode()
     if process.returncode != 0:
-        print("FFmpeg Error:")
-        print(stderr)
-        raise RuntimeError("FFmpeg process failed to encode the video.")
+        raise RuntimeError(f"FFmpeg process failed to encode the video. Exit code: {process.returncode}")
 
     # print("Video created successfully.")
     return video_path

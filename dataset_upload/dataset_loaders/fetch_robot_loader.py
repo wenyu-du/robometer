@@ -3,46 +3,64 @@ import numpy as np
 from pathlib import Path
 from tqdm import tqdm
 from typing import List, Dict
+from dataset_upload.helpers import generate_unique_id
 
 def load_fetch_robot_dataset(base_path: str) -> Dict[str, List[Dict]]:
     task_data = {}
-    base_path = Path(base_path)
     
-    # 查找所有 hdf5 文件
-    data_files = list(base_path.glob("*.hdf5"))
-    print(f"Found {len(data_files)} files in {base_path}")
+    # 支持多路径解析
+    paths = base_path.replace(',', ':').split(':')
+    data_files = []
+    for p in paths:
+        p_path = Path(p.strip())
+        if p_path.exists():
+            found = list(p_path.glob("*.hdf5"))
+            print(f"Found {len(found)} files in {p_path}")
+            data_files.extend(found)
+        else:
+            print(f"Warning: Path {p_path} does not exist")
     
-    for file_path in tqdm(data_files, desc="Processing Fetch HDF5"):
+    print(f"Total files to process: {len(data_files)}")
+    
+    # 定义要提取的视角名称
+    camera_views = ['fetch_head_rgb', 'fetch_hand_rgb']
+    
+    for file_path in tqdm(data_files, desc="Loading Fetch Data"):
         with h5py.File(file_path, 'r') as f:
-            # 1. 提取图像 (建议用头部视角，如果是 128x128)
-            # shape 是 (111, 128, 128, 3)
-            frames = f['obs/fetch_head_rgb'][:] 
-            
-            # 2. 提取动作
+            # 提取共享元数据
             actions = f['action'][:]
-            
-            # 3. 提取任务名 (如果 HDF5 没存，就用文件名去掉后缀)
-            # 优先从属性里找，找不到就用文件名
-            # task_name = f.attrs.get('task', file_path.stem).replace('_', ' ')
-
-            # 写死任务名称
             task_name = 'OpenPickBowl'
             
-            # 4. 确定是否成功
-            # 根据你的输出有 success (111,)，我们看最后一帧是否为 1
-            is_success = f['success'][-1] > 0
-            optimal_status = 'success' if is_success else 'failed'
-
-            trajectory = {
-                'frames': frames,        # 图像数组
-                'actions': actions,      # 动作数组
-                'is_robot': True,
-                'task': task_name,
-                'optimal': optimal_status
-            }
+            rewards = f['reward'][:]
+            max_reward = np.max(rewards)
+            partial_success = float(max_reward) / 3.0
             
-            if task_name not in task_data:
-                task_data[task_name] = []
-            task_data[task_name].append(trajectory)
+            is_success = f['success'][-1] > 0
+            quality_label = 'successful' if is_success else 'failure'
+
+            # 为每一个视角创建一条独立的轨迹
+            for view_key in camera_views:
+                full_view_path = f'obs/{view_key}'
+                if full_view_path not in f:
+                    continue
+                
+                # 直接读取图像数组到内存
+                # 在 2TB 内存的机器上，这样做最快且最稳定
+                frames = f[full_view_path][:] 
+
+                trajectory = {
+                    'id': generate_unique_id(),
+                    'frames': frames,        
+                    'actions': actions,      
+                    'is_robot': True,
+                    'task': task_name,
+                    'quality_label': quality_label, 
+                    'partial_success': partial_success, 
+                    'view': view_key         
+                }
+                
+                if task_name not in task_data:
+                    task_data[task_name] = []
+                task_data[task_name].append(trajectory)
             
     return task_data
